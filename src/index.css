@@ -1,0 +1,96 @@
+@import 'tailwindcss';
+
+/**
+ * Telemetry-console theme. Tailwind v4 is CSS-first, so design tokens are
+ * declared here with @theme and become utilities (bg-surface, text-accent, …).
+ */
+@theme {
+  /* Deep-space backdrop */
+  --color-void: #08090c;
+  --color-space: #0e1117;
+  --color-surface: #131720;
+  --color-surface-hi: #191e2a;
+
+  /* Instrument accents */
+  --color-accent: #38bdf8; /* electric blue */
+  --color-amber: #f59e0b; /* space amber */
+  --color-emerald: #10b981; /* nominal / success */
+  --color-crimson: #ef4444; /* anomaly / failure */
+  --color-violet: #a78bfa; /* starlink */
+
+  --font-mono:
+    ui-monospace, 'SFMono-Regular', 'JetBrains Mono', 'Menlo', 'Consolas',
+    monospace;
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply bg-void text-white/90 font-sans antialiased;
+    /* Faint starfield: two offset radial washes, no image request. */
+    background-image:
+      radial-gradient(
+        ellipse 80% 50% at 50% -20%,
+        rgba(56, 189, 248, 0.08),
+        transparent
+      ),
+      radial-gradient(
+        ellipse 60% 40% at 80% 110%,
+        rgba(167, 139, 250, 0.06),
+        transparent
+      );
+    background-attachment: fixed;
+  }
+
+  /* Tabular figures everywhere numbers are compared vertically. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  ::selection {
+    background: rgba(56, 189, 248, 0.3);
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-surface/80 border border-white/10 rounded-xl backdrop-blur-sm;
+  }
+
+  /* Subtle lift + accent glow on interactive cards. */
+  .panel-hover {
+    @apply transition-all duration-200;
+  }
+  .panel-hover:hover {
+    @apply border-white/20 bg-surface-hi/80;
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.08),
+      0 8px 32px -8px rgba(56, 189, 248, 0.15);
+  }
+
+  .label-caps {
+    @apply text-[0.65rem] uppercase tracking-[0.14em] text-white/40 font-medium;
+  }
+}
+
+/* Recharts paints an SVG focus outline on click; suppress it. */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,87 @@
+name: Build & Deploy
+
+# Deploys on every push to main so code changes go live immediately, and on
+# a schedule so the launch snapshot stays current (the data is baked in at
+# build time — see scripts/fetch-data.mjs for why it isn't fetched in the
+# browser).
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Twice daily at :17 past, off the top of the hour to avoid the thundering
+    # herd of cron jobs that fire at exactly :00.
+    - cron: '17 3,15 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; queue instead of cancelling so a scheduled
+# data refresh can't be dropped by a concurrent push.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Refresh launch snapshot
+        # LL2 allows 15 anonymous requests/hour and this needs ~9. Set the
+        # optional LL2_API_TOKEN secret for headroom if the schedule gets
+        # busier. Non-fatal: if the refresh fails we still deploy with the
+        # snapshot committed in the repo rather than shipping nothing.
+        continue-on-error: true
+        env:
+          LL2_API_TOKEN: ${{ secrets.LL2_API_TOKEN }}
+        run: npm run data
+
+      - name: Verify a snapshot exists
+        # Guards the case where the fetch above failed AND no snapshot was
+        # ever committed — better to fail loudly than deploy an empty dashboard.
+        run: |
+          test -s public/data/launches.json || {
+            echo "::error::public/data/launches.json is missing or empty."
+            exit 1
+          }
+          node -e "
+            const d = require('./public/data/launches.json');
+            if (!Array.isArray(d) || d.length < 100) {
+              console.error('::error::Snapshot has only ' + (d.length ?? 0) + ' launches.');
+              process.exit(1);
+            }
+            console.log('Snapshot OK: ' + d.length + ' launches');
+          "
+
+      - name: Build
+        run: npm run build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
