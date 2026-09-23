@@ -9,16 +9,17 @@ import {
 } from '../lib/launch'
 import type { Launch, Outcome } from '../lib/types'
 import { cn, hostOf } from '../lib/utils'
+import { vehicleColor } from '../lib/vehicles'
 import { Badge } from './ui/Badge'
 
 const OUTCOME_META: Record<
   Outcome,
-  { label: string; tone: 'emerald' | 'crimson' | 'amber' | 'accent'; bar: string }
+  { label: string; tone: 'emerald' | 'crimson' | 'amber' | 'accent' }
 > = {
-  success: { label: 'Success', tone: 'emerald', bar: 'bg-emerald' },
-  failure: { label: 'Failure', tone: 'crimson', bar: 'bg-crimson' },
-  partial: { label: 'Partial', tone: 'amber', bar: 'bg-amber' },
-  pending: { label: 'Scheduled', tone: 'accent', bar: 'bg-accent' },
+  success: { label: 'Success', tone: 'emerald' },
+  failure: { label: 'Failure', tone: 'crimson' },
+  partial: { label: 'Partial', tone: 'amber' },
+  pending: { label: 'Scheduled', tone: 'accent' },
 }
 
 /** Sleek rocket silhouette shown when LL2 has no mission patch. */
@@ -63,6 +64,7 @@ export function LaunchCard({
 }) {
   const outcome = outcomeOf(launch)
   const meta = OUTCOME_META[outcome]
+  const spineColor = vehicleColor(launch.rocketName)
   const starlink = isStarlinkMission(launch)
   const netDate = new Date(launch.net)
   const validDate = !Number.isNaN(netDate.getTime())
@@ -81,10 +83,13 @@ export function LaunchCard({
         'panel panel-hover group relative flex flex-col overflow-hidden text-left',
       )}
     >
-      {/* Outcome spine */}
+      {/* Vehicle spine — colour encodes the launch vehicle (see the legend
+          above the grid and the "Vehicle mix" chart, which share this
+          palette). Outcome is carried by the badge in the header instead. */}
       <span
         aria-hidden
-        className={cn('absolute top-0 left-0 h-full w-[3px]', meta.bar)}
+        className="absolute top-0 left-0 h-full w-[3px]"
+        style={{ background: spineColor }}
       />
 
       <button
@@ -115,8 +120,13 @@ export function LaunchCard({
             <h3 className="truncate text-sm font-semibold text-white/90 transition-colors group-hover:text-accent">
               {launch.missionName ?? launch.name}
             </h3>
-            <p className="mt-0.5 flex items-center gap-1 truncate text-[0.7rem] text-white/40">
-              <Rocket className="size-3 shrink-0 text-white/25" aria-hidden />
+            {/* Vehicle is a primary axis of the grid now, so it's tinted to
+                match the spine rather than rendered as muted metadata. */}
+            <p
+              className="mt-1 flex items-center gap-1 truncate text-[0.72rem] font-semibold"
+              style={{ color: spineColor }}
+            >
+              <Rocket className="size-3 shrink-0 opacity-80" aria-hidden />
               {launch.rocketFullName ?? launch.rocketName ?? 'Unknown vehicle'}
             </p>
           </div>

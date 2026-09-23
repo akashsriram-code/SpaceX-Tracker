@@ -146,7 +146,7 @@ export interface Snapshot {
 
 /* ------------------------------ UI view models ----------------------------- */
 
-export type TabId = 'upcoming' | 'past' | 'analytics'
+export type TabId = 'upcoming' | 'past' | 'analytics' | 'boosters'
 
 export type StarlinkFilter = 'all' | 'customer' | 'starlink'
 

@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   CheckCircle2,
   RefreshCw,
   Rocket,
@@ -14,12 +15,17 @@ function KpiCard({
   value,
   sub,
   tone,
+  onClick,
+  actionLabel,
 }: {
   icon: LucideIcon
   label: string
   value: string
   sub: string
   tone: 'accent' | 'emerald' | 'amber' | 'violet'
+  /** When set the tile becomes a button that deep-links to a chart. */
+  onClick?: () => void
+  actionLabel?: string
 }) {
   const toneClasses = {
     accent: 'text-accent',
@@ -28,8 +34,8 @@ function KpiCard({
     violet: 'text-violet',
   }[tone]
 
-  return (
-    <div className="panel panel-hover p-4 sm:p-5">
+  const body = (
+    <>
       <div className="flex items-center justify-between gap-2">
         <span className="label-caps">{label}</span>
         <Icon className={cn('size-4 shrink-0', toneClasses)} aria-hidden />
@@ -43,11 +49,40 @@ function KpiCard({
         {value}
       </p>
       <p className="mt-1 text-[0.7rem] leading-snug text-white/40">{sub}</p>
-    </div>
+    </>
+  )
+
+  if (!onClick) {
+    return <div className="panel panel-hover p-4 sm:p-5">{body}</div>
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      aria-label={actionLabel ?? `${label}: ${value}`}
+      className="panel panel-hover group cursor-pointer p-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 sm:p-5"
+    >
+      {body}
+      <span
+        className={cn(
+          'mt-2 flex items-center gap-1 text-[0.65rem] font-medium opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100',
+          toneClasses,
+        )}
+      >
+        {actionLabel ?? 'View chart'}
+        <ArrowRight className="size-3" aria-hidden />
+      </span>
+    </button>
   )
 }
 
-export function KpiBar({ kpis }: { kpis: Kpis }) {
+export function KpiBar({
+  kpis,
+  onShowStarlinkChart,
+}: {
+  kpis: Kpis
+  onShowStarlinkChart?: () => void
+}) {
   const starlinkPct =
     kpis.starlinkShare != null ? formatPct(kpis.starlinkShare, 0) : '—'
 
@@ -83,6 +118,8 @@ export function KpiBar({ kpis }: { kpis: Kpis }) {
         label="Starlink Share"
         value={starlinkPct}
         sub={`${formatInt(kpis.starlinkLaunches)} Starlink · ${formatInt(kpis.customerLaunches)} customer`}
+        onClick={onShowStarlinkChart}
+        actionLabel="See yearly split"
       />
     </section>
   )

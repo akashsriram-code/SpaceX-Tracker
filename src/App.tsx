@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, LoadingState } from './components/ui/States'
 import { useSnapshot } from './hooks/useLaunches'
 import {
   boosterLabel,
+  hasKnownSerial,
   isStarlinkMission,
   isUpcoming,
   launchYear,
@@ -17,13 +18,17 @@ import {
 } from './lib/launch'
 import { computeFilterOptions, computeKpis } from './lib/stats'
 import type { Filters, Launch, TabId } from './lib/types'
+import { vehiclesInUse } from './lib/vehicles'
 
 /**
- * Recharts is ~60% of the bundle and only the Analytics tab needs it, so it
- * loads on demand. Keeps the default Upcoming view light on first paint.
+ * Recharts is ~60% of the bundle and only the chart tabs need it, so both
+ * load on demand. Keeps the default Upcoming view light on first paint.
  */
 const Analytics = lazy(() =>
   import('./components/Analytics').then((m) => ({ default: m.Analytics })),
+)
+const Boosters = lazy(() =>
+  import('./components/Boosters').then((m) => ({ default: m.Boosters })),
 )
 
 const INITIAL_FILTERS: Filters = {
@@ -33,6 +38,17 @@ const INITIAL_FILTERS: Filters = {
   pad: '',
   year: '',
   sort: 'newest',
+}
+
+/** Distinct identified boosters in a set, for the Boosters tab count. */
+function countDistinctCores(launches: Launch[]): number {
+  const serials = new Set<string>()
+  for (const l of launches) {
+    for (const b of l.boosters) {
+      if (hasKnownSerial(b.serial)) serials.add(b.serial as string)
+    }
+  }
+  return serials.size
 }
 
 /** Free-text match across the fields a user would plausibly search by. */
@@ -61,6 +77,8 @@ export default function App() {
   const [tab, setTab] = useState<TabId>('upcoming')
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS)
   const [selected, setSelected] = useState<Launch | null>(null)
+  /** DOM id of a chart to scroll to, set when a KPI tile is clicked. */
+  const [focusChart, setFocusChart] = useState<string | null>(null)
 
   const launches = data?.launches ?? []
 
@@ -89,6 +107,7 @@ export default function App() {
     () => ({
       upcoming: scoped.filter(isUpcoming).length,
       past: scoped.filter((l) => !isUpcoming(l)).length,
+      boosters: countDistinctCores(scoped),
     }),
     [scoped],
   )
@@ -112,6 +131,13 @@ export default function App() {
         : dir * b.net.localeCompare(a.net),
     )
   }, [scoped, tab, filters])
+
+  // Vehicles present in the visible list, so the spine legend only advertises
+  // colours actually on screen.
+  const vehicleLegend = useMemo(
+    () => vehiclesInUse(visible.map((l) => l.rocketName)),
+    [visible],
+  )
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
@@ -146,7 +172,13 @@ export default function App() {
 
       {data && (
         <div className="space-y-6">
-          <KpiBar kpis={kpis} />
+          <KpiBar
+            kpis={kpis}
+            onShowStarlinkChart={() => {
+              setTab('analytics')
+              setFocusChart('chart-cadence')
+            }}
+          />
 
           <NextLaunchHero launch={nextLaunch} onOpen={setSelected} />
 
@@ -161,7 +193,15 @@ export default function App() {
 
           {tab === 'analytics' ? (
             <Suspense fallback={<LoadingState label="Loading charts…" />}>
-              <Analytics launches={scoped} />
+              <Analytics
+                launches={scoped}
+                focusChart={focusChart}
+                onFocusHandled={() => setFocusChart(null)}
+              />
+            </Suspense>
+          ) : tab === 'boosters' ? (
+            <Suspense fallback={<LoadingState label="Loading fleet telemetry…" />}>
+              <Boosters launches={scoped} />
             </Suspense>
           ) : visible.length === 0 ? (
             <EmptyState
@@ -170,9 +210,28 @@ export default function App() {
             />
           ) : (
             <>
-              <p className="font-mono text-[0.7rem] tnum text-white/30">
-                {visible.length} mission{visible.length === 1 ? '' : 's'}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="font-mono text-[0.7rem] tnum text-white/30">
+                  {visible.length} mission{visible.length === 1 ? '' : 's'}
+                </p>
+                {/* Legend for the card spine colours */}
+                <ul className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {vehicleLegend.map((v) => (
+                    <li
+                      key={v.name}
+                      className="flex items-center gap-1.5 text-[0.7rem] text-white/45"
+                    >
+                      <span
+                        aria-hidden
+                        className="h-2.5 w-[3px] rounded-full"
+                        style={{ background: v.color }}
+                      />
+                      {v.name}
+                      <span className="font-mono tnum text-white/25">{v.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {visible.map((l) => (
                   <LaunchCard key={l.id} launch={l} onOpen={setSelected} />

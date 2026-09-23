@@ -7,6 +7,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'upcoming', label: 'Upcoming' },
   { id: 'past', label: 'Past' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'boosters', label: 'Boosters' },
 ]
 
 const STARLINK_OPTIONS: Array<{ id: StarlinkFilter; label: string; hint: string }> = [
@@ -60,12 +61,14 @@ export function FilterToolbar({
   filters: Filters
   onFiltersChange: (f: Filters) => void
   options: FilterOptions
-  counts: { upcoming: number; past: number }
+  counts: { upcoming: number; past: number; boosters: number }
 }) {
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     onFiltersChange({ ...filters, [key]: value })
 
-  const isAnalytics = tab === 'analytics'
+  // Chart tabs aggregate over the whole scoped set, so the per-launch
+  // search/rocket/site/year controls don't apply — only the Starlink scope does.
+  const isChartTab = tab === 'analytics' || tab === 'boosters'
   const hasActiveFilters =
     filters.search !== '' ||
     filters.starlink !== 'all' ||
@@ -84,7 +87,13 @@ export function FilterToolbar({
         {TABS.map((t) => {
           const active = t.id === tab
           const count =
-            t.id === 'upcoming' ? counts.upcoming : t.id === 'past' ? counts.past : null
+            t.id === 'upcoming'
+              ? counts.upcoming
+              : t.id === 'past'
+                ? counts.past
+                : t.id === 'boosters'
+                  ? counts.boosters
+                  : null
           return (
             <button
               key={t.id}
@@ -144,7 +153,7 @@ export function FilterToolbar({
           })}
         </div>
 
-        {!isAnalytics && (
+        {!isChartTab && (
           <>
             {/* Search */}
             <div className="relative">
