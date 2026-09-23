@@ -85,8 +85,21 @@ Optional: set `LL2_API_TOKEN` for a higher LL2 rate limit.
 `.github/workflows/deploy.yml` handles everything:
 
 1. Pushes to `main` → build + deploy immediately.
-2. Twice-daily cron → refresh the snapshot and redeploy, so data stays current.
+2. Cron every 4 hours (`00:17, 04:17 … 20:17 UTC`) → refresh the snapshot and
+   redeploy, so launch data stays current.
 3. `workflow_dispatch` → manual trigger.
+
+A refresh costs ~9 of LL2's 15 anonymous requests/hour and runs are 4 hours
+apart, so each starts with a fresh budget. Set an `LL2_API_TOKEN` secret if you
+want to refresh more often than hourly.
+
+Note the countdown is always live regardless of cadence — it ticks client-side
+off the snapshot's NET. The schedule only bounds how quickly a *changed* NET
+(a scrub or delay) reaches the site.
+
+> GitHub disables scheduled workflows in repositories with no activity for 60
+> days. If the data ever looks frozen, check whether the schedule was
+> auto-disabled in the Actions tab.
 
 **One-time setup:** repo **Settings → Pages → Build and deployment → Source:
 GitHub Actions**.

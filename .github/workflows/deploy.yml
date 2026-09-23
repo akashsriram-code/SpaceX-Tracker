@@ -8,9 +8,16 @@ on:
   push:
     branches: [main]
   schedule:
-    # Twice daily at :17 past, off the top of the hour to avoid the thundering
-    # herd of cron jobs that fire at exactly :00.
-    - cron: '17 3,15 * * *'
+    # Every 4 hours at :17 past — 00:17, 04:17, … 20:17 UTC.
+    #
+    # :17 rather than :00 deliberately: GitHub's scheduler is busiest at the
+    # top of the hour and delays queued cron jobs accordingly.
+    #
+    # Rate-limit headroom: one refresh costs ~9 of Launch Library 2's 15
+    # anonymous requests/hour, and consecutive runs are 4 hours apart, so each
+    # starts with a fresh hourly budget. Going below a ~1 hour interval would
+    # need the LL2_API_TOKEN secret.
+    - cron: '17 */4 * * *'
   workflow_dispatch:
 
 permissions:
