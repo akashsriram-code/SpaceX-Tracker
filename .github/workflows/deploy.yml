@@ -75,6 +75,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify spreadsheet export
+        # Builds the .xlsx download from this snapshot with the shipped code
+        # and checks it cell by cell. Fatal on purpose: a data refresh (or a
+        # library upgrade) that breaks the export should stop the deploy, not
+        # ship a quietly wrong spreadsheet.
+        run: npm run verify:export
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 

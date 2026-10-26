@@ -51,6 +51,40 @@ timestamp, so it is genuinely per-second without costing a single request.
 
 ---
 
+## Downloading the data
+
+**Download spreadsheet** in the header saves the whole snapshot (every launch
+and every field, not the filtered view) as one `.xlsx`. It is built in the
+browser from the same snapshot the page is showing, and named after the
+snapshot time, e.g. `spacex-launches_2026-09-22_1657Z.xlsx`.
+
+| Sheet | One row per |
+|---|---|
+| About | item of information: snapshot time, source, attribution, caveats, sheet row counts |
+| Launches | launch, newest NET first |
+| Boosters | booster flown on a launch (`boosters[]`) |
+| Payloads | payload listed for a launch (`payloads[]`) |
+| Agencies | mission agency of a launch (`agencies[]`) |
+| Links | video or info link of a launch (`vidUrls[]`, then `infoUrls[]`) |
+| Columns | column on the data sheets: its type, source and meaning |
+
+- **Launch ID** is the first column of every data sheet and the join key back
+  to Launches.
+- **All date-times are UTC**, stored as real Excel date-times, so they sort and
+  filter as dates.
+- **A blank cell means null** (no value upstream), never `FALSE` or `0`.
+  Booleans are real `TRUE`/`FALSE`.
+- Headers ending in **(derived)**, with an amber fill, are computed by the rules
+  in `src/lib/launch.ts`, the same ones the dashboard uses. Everything else is
+  Launch Library 2 data as snapshotted.
+- Every data sheet has a frozen header row, frozen columns A:B and an autofilter.
+
+**Adding a field to `src/lib/types.ts`?** Map it in `src/lib/export/schema.ts`
+as well. `tsc` enforces this: the `*_FIELDS` coverage maps there must name
+every field, so the build fails until the new field has a column.
+
+---
+
 ## Quick start
 
 ```bash
@@ -69,6 +103,7 @@ Scripts:
 | `npm run data` | Refresh snapshot from **production** LL2 (15 req/hr limit) |
 | `npm run data:dev` | Refresh from the LL2 **dev mirror** — generous limits, but a smaller/laggier dataset (~230 launches vs. 860) |
 | `npm run typecheck` | Types only |
+| `npm run verify:export` | Build the spreadsheet export from the snapshot and check it cell by cell (runs in CI) |
 | `npm run deploy` | Manual `gh-pages` publish (CI is preferred) |
 
 Optional: set `LL2_API_TOKEN` for a higher LL2 rate limit.
@@ -122,15 +157,19 @@ copying `index.html` only if you introduce routing later.
 ## Architecture
 
 ```
-scripts/fetch-data.mjs   LL2 -> slim JSON snapshot. Transport only, no business logic.
-public/data/*.json       Committed snapshot (860 launches, ~1.8 MB raw / ~206 KB gzip).
-src/lib/types.ts         Domain model describing the snapshot shape.
-src/lib/launch.ts        ALL interpretation: Starlink detection, customer attribution,
-                         outcome collapsing, booster labels.
-src/lib/stats.ts         Pure aggregation for KPIs and charts.
-src/lib/api.ts           Snapshot loading + sessionStorage SWR cache (15-min TTL).
-src/hooks/               useSnapshot (React Query), useCountdown (1 Hz ticker).
-src/components/          Header/KPIs, hero countdown, filters, card grid, drawer, analytics.
+scripts/fetch-data.mjs     LL2 -> slim JSON snapshot. Transport only, no business logic.
+public/data/*.json         Committed snapshot (860 launches, ~1.8 MB raw / ~206 KB gzip).
+src/lib/types.ts           Domain model describing the snapshot shape.
+src/lib/launch.ts          ALL interpretation: Starlink detection, customer attribution,
+                           outcome collapsing, booster labels.
+src/lib/stats.ts           Pure aggregation for KPIs and charts.
+src/lib/api.ts             Snapshot loading + sessionStorage SWR cache (15-min TTL).
+src/lib/export/schema.ts   Spreadsheet columns: field -> header/type, plus types.ts coverage maps.
+src/lib/export/workbook.ts Snapshot -> sheets of typed cells. Pure, no spreadsheet library.
+src/lib/export/xlsx.ts     Sheets -> .xlsx (write-excel-file). Lazy-loaded on click.
+src/hooks/                 useSnapshot (React Query), useCountdown (1 Hz ticker).
+src/components/            Header/KPIs, hero countdown, filters, card grid, drawer, analytics.
+scripts/verify-export.mjs  Builds the .xlsx and checks it against the snapshot (CI).
 ```
 
 The split between `fetch-data.mjs` (dumb) and `src/lib/launch.ts` (all rules) is
@@ -138,17 +177,24 @@ deliberate: every business rule has exactly one implementation, and changing one
 doesn't require re-fetching data.
 
 Recharts is lazy-loaded with the Analytics tab, which keeps the initial bundle at
-**~84 KB gzip** instead of ~196 KB.
+**~87 KB gzip** instead of ~196 KB. The spreadsheet writer (~26 KB gzip) loads
+on demand like Recharts, when the download button is hovered, focused or
+clicked.
 
 ### Known data limitations
 
 These are upstream gaps, surfaced honestly in the UI rather than papered over:
 
 - **Customer attribution is derived.** LL2 has no customer field. It is inferred
-  from mission agencies first (real upstream data), then mission-name patterns.
-  The UI labels it "derived" everywhere it appears.
-- **Payload mass/manufacturer is sparse** — populated for only ~16 of 860
-  launches. The drawer says so explicitly instead of rendering blanks.
+  from payload customers when LL2 has them, then Starlink detection, then
+  contract-program name patterns (e.g. Crew-N, CRS), then mission agencies (real
+  upstream data), then operator name patterns, then "SpaceX (Internal)" when
+  SpaceX is the only agency, otherwise "Undisclosed" (see
+  `customersOf` in `src/lib/launch.ts`). The UI labels it "derived" everywhere
+  it appears.
+- **Payload data is sparse** — the current snapshot has 20 payload records
+  across 860 launches, none with a mass. The drawer says so explicitly instead
+  of rendering blanks, and the spreadsheet's About sheet reports the live count.
 - **NET precision varies.** Far-future missions carry `Quarter`/`Year` precision;
   the hero shows the precision label instead of a fake to-the-second countdown.
 - **No Reddit links.** LL2 doesn't expose them. Whatever reference links it does

@@ -11,6 +11,7 @@
     "data": "node scripts/fetch-data.mjs",
     "data:dev": "node scripts/fetch-data.mjs --dev",
     "audit": "tsx scripts/audit-attribution.mjs",
+    "verify:export": "tsx scripts/verify-export.mjs",
     "deploy": "npm run build && gh-pages -d dist"
   },
   "dependencies": {
@@ -21,7 +22,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.14.1",
-    "tailwind-merge": "^2.5.5"
+    "tailwind-merge": "^2.5.5",
+    "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
@@ -29,7 +31,9 @@
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "fflate": "^0.8.3",
     "gh-pages": "^6.2.0",
+    "read-excel-file": "^9.3.12",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.23.15",
     "typescript": "^5.7.2",

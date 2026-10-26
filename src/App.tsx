@@ -1,6 +1,6 @@
-import { format } from 'date-fns'
 import { Github, Radio } from 'lucide-react'
 import { lazy, Suspense, useMemo, useState } from 'react'
+import { DownloadButton } from './components/DownloadButton'
 import { FilterToolbar } from './components/FilterToolbar'
 import { KpiBar } from './components/KpiBar'
 import { LaunchCard } from './components/LaunchCard'
@@ -157,11 +157,18 @@ export default function App() {
           <div className="text-right">
             <p className="label-caps">Snapshot</p>
             <p className="font-mono text-[0.7rem] tnum text-white/50">
-              {format(new Date(data.meta.generatedAt), 'd MMM yyyy HH:mm')} UTC
+              {/* Sliced from the ISO string rather than formatted with
+                  date-fns, which would print the viewer's local time under
+                  a "UTC" label. Matches the export's file name and About
+                  sheet. */}
+              {data.meta.generatedAt.slice(0, 16).replace('T', ' ')} UTC
             </p>
             <p className="font-mono text-[0.65rem] tnum text-white/25">
               {data.meta.launchCount} launches · Launch Library 2
             </p>
+            {/* Here rather than in FilterToolbar: it exports the whole
+                snapshot, not the filtered view. */}
+            <DownloadButton snapshot={data} />
           </div>
         )}
       </header>
