@@ -10,8 +10,12 @@
     "typecheck": "tsc -b --noEmit",
     "data": "node scripts/fetch-data.mjs",
     "data:dev": "node scripts/fetch-data.mjs --dev",
+    "data:starlink": "node --use-system-ca scripts/fetch-starlink.mjs",
     "audit": "tsx scripts/audit-attribution.mjs",
+    "audit:starlink": "tsx scripts/audit-starlink.mjs",
     "verify:export": "tsx scripts/verify-export.mjs",
+    "verify:starlink-export": "tsx scripts/verify-starlink-export.mjs",
+    "coastlines": "node scripts/build-coastlines.mjs",
     "deploy": "npm run build && gh-pages -d dist"
   },
   "dependencies": {
@@ -22,7 +26,9 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.14.1",
+    "satellite.js": "7.1.0",
     "tailwind-merge": "^2.5.5",
+    "three": "0.186.1",
     "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
@@ -30,13 +36,17 @@
     "@types/node": "^26.6.2",
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.5",
+    "@types/three": "0.186.0",
+    "@types/topojson-client": "3.1.5",
     "@vitejs/plugin-react": "^4.3.4",
     "fflate": "^0.8.3",
     "gh-pages": "^6.2.0",
     "read-excel-file": "^9.3.12",
     "tailwindcss": "^4.0.0",
+    "topojson-client": "3.1.0",
     "tsx": "^4.23.15",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "world-atlas": "2.0.2"
   }
 }

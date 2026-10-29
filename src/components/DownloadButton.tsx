@@ -1,10 +1,11 @@
 import { FileSpreadsheet, Loader2 } from 'lucide-react'
 import { useState } from 'react'
-import type { Snapshot } from '../lib/types'
+import type { Launch, Snapshot, StarlinkSnapshot } from '../lib/types'
 
 /**
  * "Download spreadsheet": the whole snapshot as one multi-sheet .xlsx, built
- * in the browser from the same data the header is showing.
+ * in the browser from the same data the header is showing. "Download
+ * satellites" on the Starlink tab does the same for the satellite catalogue.
  *
  * The builder lives in src/lib/export/ and is only ever imported
  * dynamically below — never statically — so the writer stays out of the
@@ -15,9 +16,11 @@ import type { Snapshot } from '../lib/types'
 
 type State = 'idle' | 'working' | 'error'
 
-const prefetch = () => {
-  // Vite dedupes this with the import in run(); a failure here is retried
-  // (and reported) there.
+type Built = { blob: Blob; fileName: string }
+
+const prefetchExporter = () => {
+  // Vite dedupes this with the import in each build(); a failure here is
+  // retried (and reported) there.
   void import('../lib/export/xlsx').catch(() => {})
 }
 
@@ -45,7 +48,18 @@ function saveBlob(blob: Blob, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
-export function DownloadButton({ snapshot }: { snapshot: Snapshot }) {
+interface SpreadsheetButtonProps {
+  /** Loads the exporter and builds the file; called once per click. */
+  build: () => Promise<Built>
+  label: string
+  hint: string
+  /** Unique per page, so two buttons' aria-describedby never collide. */
+  hintId: string
+  prefetch: () => void
+}
+
+/** The shared idle → working → idle/error state machine behind both buttons. */
+function SpreadsheetButton({ build, label, hint, hintId, prefetch }: SpreadsheetButtonProps) {
   const [state, setState] = useState<State>('idle')
   const [error, setError] = useState<string | null>(null)
   const [announcement, setAnnouncement] = useState('')
@@ -67,8 +81,7 @@ export function DownloadButton({ snapshot }: { snapshot: Snapshot }) {
     await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
 
     try {
-      const { buildSnapshotXlsx } = await import('../lib/export/xlsx')
-      const { blob, fileName } = await buildSnapshotXlsx(snapshot, { exportedAt: new Date() })
+      const { blob, fileName } = await build()
       saveBlob(blob, fileName)
       setState('idle')
       setAnnouncement(`Download started: ${fileName}`)
@@ -92,7 +105,7 @@ export function DownloadButton({ snapshot }: { snapshot: Snapshot }) {
         onFocus={prefetch}
         aria-disabled={working}
         aria-busy={working}
-        aria-describedby="dl-hint"
+        aria-describedby={hintId}
         className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/70 transition-colors hover:border-accent/40 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent aria-disabled:cursor-progress aria-disabled:opacity-70"
       >
         {working ? (
@@ -100,10 +113,10 @@ export function DownloadButton({ snapshot }: { snapshot: Snapshot }) {
         ) : (
           <FileSpreadsheet className="size-3.5" aria-hidden />
         )}
-        {working ? 'Preparing…' : state === 'error' ? 'Try again' : 'Download spreadsheet'}
+        {working ? 'Preparing…' : state === 'error' ? 'Try again' : label}
       </button>
-      <p id="dl-hint" className="font-mono text-[0.6rem] text-white/25">
-        All {snapshot.meta.launchCount} launches · every field · .xlsx
+      <p id={hintId} className="font-mono text-[0.6rem] text-white/25">
+        {hint}
       </p>
       <span role="status" aria-live="polite" className="sr-only">
         {announcement}
@@ -114,5 +127,46 @@ export function DownloadButton({ snapshot }: { snapshot: Snapshot }) {
         </p>
       )}
     </div>
+  )
+}
+
+/** The header button: every launch in the snapshot. */
+export function DownloadButton({ snapshot }: { snapshot: Snapshot }) {
+  return (
+    <SpreadsheetButton
+      build={async () => {
+        const { buildSnapshotXlsx } = await import('../lib/export/xlsx')
+        return buildSnapshotXlsx(snapshot, { exportedAt: new Date() })
+      }}
+      label="Download spreadsheet"
+      hint={`All ${snapshot.meta.launchCount} launches · every field · .xlsx`}
+      hintId="dl-hint"
+      prefetch={prefetchExporter}
+    />
+  )
+}
+
+/**
+ * The Starlink tab's button: every satellite, reentered ones included.
+ * `launches` is only used to link each satellite to its LL2 launch.
+ */
+export function StarlinkDownloadButton({
+  snapshot,
+  launches,
+}: {
+  snapshot: StarlinkSnapshot
+  launches: Launch[]
+}) {
+  return (
+    <SpreadsheetButton
+      build={async () => {
+        const { buildStarlinkXlsx } = await import('../lib/export/xlsx')
+        return buildStarlinkXlsx(snapshot, launches, { exportedAt: new Date() })
+      }}
+      label="Download satellites"
+      hint={`All ${snapshot.satellites.length.toLocaleString('en-US')} satellites · every field · .xlsx`}
+      hintId="dl-hint-starlink"
+      prefetch={prefetchExporter}
+    />
   )
 }

@@ -1,12 +1,14 @@
 /**
- * Writes a WorkbookModel as an .xlsx file, and is the entry point the
- * Download button lazy-loads.
+ * Writes a WorkbookModel as an .xlsx file, and is the entry point both
+ * Download buttons lazy-load (launches in the header, satellites on the
+ * Starlink tab).
  *
  * Loaded on demand so the initial bundle is unchanged; never import
  * statically from app code. Like Recharts in App.tsx: the writer and its zip
  * library are ~26 KB gzip that only someone clicking "Download spreadsheet"
  * should pay for. A static import from anywhere in the main bundle would
- * quietly pull all of it into the entry chunk.
+ * quietly pull all of it into the entry chunk — and, through
+ * starlinkWorkbook.ts, every Starlink interpretation rule with it.
  *
  * This is the ONLY module that touches write-excel-file. If the library is
  * ever replaced, only this file changes. It's imported from the 'universal'
@@ -15,16 +17,10 @@
  */
 
 import writeXlsxFile, { type Cell, type Feature, type Sheet } from 'write-excel-file/universal'
-import type { Snapshot } from '../types'
-import {
-  buildWorkbook,
-  exportFileName,
-  type BuildOptions,
-  type BuildStats,
-  type ModelColumn,
-  type ModelSheet,
-  type WorkbookModel,
-} from './workbook'
+import type { Launch, Snapshot, StarlinkSnapshot } from '../types'
+import type { BuildStats, CellValue, ModelColumn, ModelSheet, WorkbookModel } from './cells'
+import { buildStarlinkWorkbook, starlinkExportFileName } from './starlinkWorkbook'
+import { buildWorkbook, exportFileName, type BuildOptions } from './workbook'
 
 /**
  * Set on EVERY sheet, not just the ones with dates: write-excel-file throws
@@ -32,6 +28,9 @@ import {
  * the snapshot has second-precision NETs.
  */
 const DATE_FORMAT = 'yyyy-mm-dd hh:mm:ss'
+
+/** For 'date' columns: day-precision source dates shouldn't show a fake 00:00:00. */
+const DAY_FORMAT = 'yyyy-mm-dd'
 
 const HEADER_FILL = '#D9E2F3'
 /** Amber, so derived columns stand out from data supplied by LL2. */
@@ -130,12 +129,31 @@ function markerMissing(marker: string): Error {
   return new Error(`write-excel-file output changed: autoFilter hook could not find ${marker}`)
 }
 
+/**
+ * Gives the Dates in 'date' columns the day-only format; every other cell is
+ * passed through untouched. A sheet without 'date' columns (all of the
+ * launch workbook) keeps its original row arrays.
+ */
+function withDayFormat(sheet: ModelSheet): Cell[][] {
+  const dayColumns = sheet.columns.flatMap((c, i) => (c.kind === 'date' ? [i] : []))
+  if (dayColumns.length === 0) return sheet.rows
+  return sheet.rows.map((row) => {
+    const out: Cell[] = [...row]
+    for (const i of dayColumns) {
+      const v: CellValue = row[i]
+      if (v instanceof Date) out[i] = { value: v, format: DAY_FORMAT }
+    }
+    return out
+  })
+}
+
 export function modelToBlob(model: WorkbookModel): Promise<Blob> {
   const sheets: Sheet<Blob>[] = model.sheets.map((s) => ({
     sheet: s.name,
     // Data cells go in as-is. The model already holds the right JS type for
     // each cell (workbook.ts chose it from the column kind), and
     // write-excel-file writes strings, numbers, booleans and Dates natively.
+    // The one exception is 'date' columns, which get a per-cell day format.
     //
     // Text is never escaped with a leading apostrophe: strings go in as
     // shared strings, which Excel never evaluates, so a value like "=1+1"
@@ -144,7 +162,7 @@ export function modelToBlob(model: WorkbookModel): Promise<Blob> {
     // Numbers get no number format on purpose. '#,##0' would show a 1.33 kg
     // mass as "1", and '#,##0.###' leaves a stray "." on whole numbers, so
     // Excel's General format is the one that shows every value as it is.
-    data: [s.columns.map(headerCell), ...s.rows],
+    data: [s.columns.map(headerCell), ...withDayFormat(s)],
     columns: s.columns.map((c) => ({ width: columnWidth(c) })),
     dateFormat: DATE_FORMAT,
     stickyRowsCount: 1,
@@ -161,4 +179,21 @@ export async function buildSnapshotXlsx(
   const { model, stats } = buildWorkbook(snapshot, opts)
   const blob = await modelToBlob(model)
   return { blob, fileName: exportFileName(snapshot.meta), stats }
+}
+
+/**
+ * Every Starlink satellite as a ready-to-save .xlsx. `launches` is the
+ * launch snapshot, used only to link each satellite to its LL2 launch.
+ */
+export async function buildStarlinkXlsx(
+  snapshot: StarlinkSnapshot,
+  launches: readonly Launch[],
+  opts: { exportedAt: Date },
+): Promise<{ blob: Blob; fileName: string; stats: BuildStats }> {
+  const { model, stats } = buildStarlinkWorkbook(
+    { meta: snapshot.meta, satellites: snapshot.satellites, launches },
+    opts,
+  )
+  const blob = await modelToBlob(model)
+  return { blob, fileName: starlinkExportFileName(snapshot.meta), stats }
 }

@@ -8,6 +8,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'past', label: 'Past' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'boosters', label: 'Boosters' },
+  { id: 'starlink', label: 'Starlink' },
 ]
 
 const STARLINK_OPTIONS: Array<{ id: StarlinkFilter; label: string; hint: string }> = [
@@ -55,13 +56,17 @@ export function FilterToolbar({
   onFiltersChange,
   options,
   counts,
+  onTabIntent,
 }: {
   tab: TabId
   onTabChange: (t: TabId) => void
   filters: Filters
   onFiltersChange: (f: Filters) => void
   options: FilterOptions
-  counts: { upcoming: number; past: number; boosters: number }
+  /** `starlink` is null until the satellite catalogue has loaded once. */
+  counts: { upcoming: number; past: number; boosters: number; starlink: number | null }
+  /** Hover/focus on a tab button, so a tab can start loading its data early. */
+  onTabIntent?: (t: TabId) => void
 }) {
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     onFiltersChange({ ...filters, [key]: value })
@@ -69,6 +74,9 @@ export function FilterToolbar({
   // Chart tabs aggregate over the whole scoped set, so the per-launch
   // search/rocket/site/year controls don't apply — only the Starlink scope does.
   const isChartTab = tab === 'analytics' || tab === 'boosters'
+  // The Starlink tab is about satellites, not launches: none of the launch
+  // filters (mission scope included) mean anything there.
+  const isSatelliteTab = tab === 'starlink'
   const hasActiveFilters =
     filters.search !== '' ||
     filters.starlink !== 'all' ||
@@ -93,13 +101,18 @@ export function FilterToolbar({
                 ? counts.past
                 : t.id === 'boosters'
                   ? counts.boosters
-                  : null
+                  : t.id === 'starlink'
+                    ? counts.starlink
+                    : null
           return (
             <button
               key={t.id}
               role="tab"
               aria-selected={active}
               onClick={() => onTabChange(t.id)}
+              onPointerEnter={() => onTabIntent?.(t.id)}
+              onFocus={() => onTabIntent?.(t.id)}
+              title={t.id === 'starlink' ? 'Starlink satellites currently in orbit' : undefined}
               className={cn(
                 'flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold whitespace-nowrap transition-all',
                 active
@@ -125,7 +138,7 @@ export function FilterToolbar({
 
       {/* Starlink segmented control — applies to analytics too, since the
           charts should respect the same mission scope as the lists. */}
-      <div className="panel flex flex-col gap-3 p-3 sm:p-4">
+      <div className={cn('panel flex flex-col gap-3 p-3 sm:p-4', isSatelliteTab && 'hidden')}>
         <div
           role="radiogroup"
           aria-label="Mission scope"

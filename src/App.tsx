@@ -6,8 +6,10 @@ import { KpiBar } from './components/KpiBar'
 import { LaunchCard } from './components/LaunchCard'
 import { MissionDrawer } from './components/MissionDrawer'
 import { NextLaunchHero } from './components/NextLaunchHero'
+import { ErrorBoundary } from './components/ui/ErrorBoundary'
 import { EmptyState, ErrorState, LoadingState } from './components/ui/States'
 import { useSnapshot } from './hooks/useLaunches'
+import { useStarlinkBadge } from './hooks/useStarlinkBadge'
 import {
   boosterLabel,
   hasKnownSerial,
@@ -29,6 +31,14 @@ const Analytics = lazy(() =>
 )
 const Boosters = lazy(() =>
   import('./components/Boosters').then((m) => ({ default: m.Boosters })),
+)
+/**
+ * The satellite tab brings its own ~340 KB gzip catalogue, the SGP4 worker
+ * and (on demand) three.js, so it is a separate chunk too; its data is only
+ * requested once the tab is hovered or opened.
+ */
+const Starlink = lazy(() =>
+  import('./components/Starlink').then((m) => ({ default: m.Starlink })),
 )
 
 const INITIAL_FILTERS: Filters = {
@@ -74,6 +84,7 @@ function matchesSearch(launch: Launch, q: string): boolean {
 
 export default function App() {
   const { data, isPending, isError, error, refetch } = useSnapshot()
+  const starlink = useStarlinkBadge()
   const [tab, setTab] = useState<TabId>('upcoming')
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS)
   const [selected, setSelected] = useState<Launch | null>(null)
@@ -108,8 +119,11 @@ export default function App() {
       upcoming: scoped.filter(isUpcoming).length,
       past: scoped.filter((l) => !isUpcoming(l)).length,
       boosters: countDistinctCores(scoped),
+      // Satellites aren't scoped by the launch filters, and the count only
+      // appears once the catalogue has loaded.
+      starlink: starlink.inOrbit,
     }),
-    [scoped],
+    [scoped, starlink.inOrbit],
   )
 
   const visible = useMemo(() => {
@@ -196,9 +210,26 @@ export default function App() {
             onFiltersChange={setFilters}
             options={options}
             counts={tabCounts}
+            onTabIntent={(t) => {
+              if (t === 'starlink') starlink.prefetch()
+            }}
           />
 
-          {tab === 'analytics' ? (
+          {tab === 'starlink' ? (
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingState label="Loading constellation catalogue…" />}>
+                {/* Unscoped launches: the mission filter is about launches and
+                    doesn't apply to satellites; these are only used to link a
+                    satellite back to the launch that carried it. */}
+                <Starlink
+                  launches={launches}
+                  onOpenLaunch={setSelected}
+                  focusChart={focusChart}
+                  onFocusHandled={() => setFocusChart(null)}
+                />
+              </Suspense>
+            </ErrorBoundary>
+          ) : tab === 'analytics' ? (
             <Suspense fallback={<LoadingState label="Loading charts…" />}>
               <Analytics
                 launches={scoped}
@@ -265,6 +296,30 @@ export default function App() {
           by The Space Devs, snapshotted at build time. The legacy r/SpaceX API
           (api.spacexdata.com) was archived in June 2026 and is no longer
           reachable. Customer attribution is derived, not authoritative.
+        </p>
+        <p className="mt-2 text-[0.7rem] leading-relaxed text-white/35">
+          Starlink satellite catalogue from{' '}
+          <a
+            href="https://planet4589.org/space/gcat/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent/70 hover:text-accent"
+          >
+            GCAT
+          </a>{' '}
+          (Jonathan C. McDowell, CC BY 4.0; filtered and reformatted). Orbital
+          elements from{' '}
+          <a
+            href="https://celestrak.org/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent/70 hover:text-accent"
+          >
+            CelesTrak
+          </a>
+          , sourced from USSPACECOM / 18 SDS via Space-Track.org. Coastlines
+          from Natural Earth. Satellite versions are derived, not official
+          SpaceX labels.
         </p>
         <p className="mt-2 flex items-center gap-1.5 text-[0.65rem] text-white/25">
           <Github className="size-3" aria-hidden />

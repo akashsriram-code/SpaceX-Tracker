@@ -128,6 +128,13 @@ export interface Launch {
 
   /** Nth orbital launch attempt from this pad, per LL2. */
   padLaunchAttemptCount: number | null
+
+  /**
+   * COSPAR international designator of the launch, e.g. "2026-160". Null for
+   * launches that haven't flown (and in snapshots written before this field
+   * existed). Joins satellites (GCAT Launch_Tag) to the launch that carried them.
+   */
+  launchDesignator: string | null
 }
 
 export interface SnapshotMeta {
@@ -144,9 +151,158 @@ export interface Snapshot {
   launches: Launch[]
 }
 
+/* --------------------------- Starlink satellites -------------------------- */
+
+/**
+ * Columnar transport shape of public/data/starlink.json, written by
+ * scripts/fetch-starlink.mjs. Rows are arrays ordered by `fields`; columns
+ * named in `dict` hold indexes into that dictionary. Decoded into
+ * `Satellite[]` by decodeStarlink() in src/lib/starlink.ts.
+ */
+export interface StarlinkFile {
+  v: 1
+  meta: StarlinkMeta
+  fields: string[]
+  dict: Record<string, string[]>
+  rows: Array<Array<string | number | null>>
+}
+
+/** One column of McDowell's published Starlink summary table. */
+export interface StarlinkReferenceCounts {
+  launched: number
+  failedToOrbit: number
+  earlyDeorbit: number
+  disposalComplete: number
+  reentryAfterFail: number
+  down: number
+  inOrbit: number
+  screened: number
+  failedDecaying: number
+  graveyard: number
+  working: number
+  disposalUnderway: number
+  outOfConstellation: number
+  anomalous: number
+  relocating: number
+  special: number
+  drift: number
+  ascent: number
+  operational: number
+}
+
+export interface StarlinkMeta {
+  generatedAt: string
+  /** Newest "# Updated" stamp across the GCAT files, ISO UTC. */
+  gcatUpdated: string | null
+  satelliteCount: number
+  inOrbitCount: number
+  excluded: Record<string, number>
+  /** McDowell's stats.html totals, used only as a reconciliation target. */
+  reference: {
+    asOf: string | null
+    total: StarlinkReferenceCounts
+    gen1: StarlinkReferenceCounts | null
+    gen2: StarlinkReferenceCounts | null
+    gen3: StarlinkReferenceCounts | null
+    rows: Array<{ label: string; values: StarlinkReferenceCounts }>
+  } | null
+  gp: { status: number | string; rows: number; maxEpoch: string; attemptedAt: string | null } | null
+  files: Record<string, { url: string; status: number | string; updated: string | null; rows: number | null }>
+  source: string
+  attribution: string
+}
+
+/**
+ * One Starlink satellite, as catalogued by GCAT and (when CelesTrak has
+ * elements for it) joined to its latest GP element set. Raw values only —
+ * version, lifecycle phase, shell and altitude are derived in starlink.ts.
+ */
+export interface Satellite {
+  /** GCAT id: "S" + NORAD for catalogued objects, "A…" for uncatalogued losses. */
+  jcat: string
+  /** Null for satellites lost before the US catalogue assigned a number. */
+  norad: number | null
+  /** COSPAR id, e.g. "2026-160A". Launch failures use GCAT's "2026-U04". */
+  piece: string | null
+  /** COSPAR launch, e.g. "2026-160" — the join key to LL2's launch_designator. */
+  launchTag: string | null
+  /** "38128" (the "Starlink " prefix is stripped), or "Tintin A". */
+  name: string | null
+  /** Payload name with launch group, e.g. "Group 15-14-01" or "V1.0-L1-01". */
+  plName: string | null
+  /** GCAT psatcat Program, e.g. "Starlink 2MO S3". Null for uncatalogued losses. */
+  program: string | null
+  /** GCAT Bus, e.g. "Starlink V2MO". Coarser than Program (Gen1 is one value). */
+  bus: string | null
+  /** GCAT Plane — an internal shell/plane index; undocumented for Starlink. */
+  plane: string | null
+  /** Raw 12-character GCAT Type code; byte 8 is the Starlink lifecycle flag. */
+  type: string
+  /** GCAT currentcat Active: A = active, P = previously active. */
+  active: string | null
+  launchDate: string | null
+  launchDateApprox: boolean
+  /** Reentry date; null while in orbit. */
+  decayDate: string | null
+  decayDateApprox: boolean
+  /** End of operations (psatcat TOp), when GCAT records one. */
+  endOfOps: string | null
+  /** GCAT's estimate, not a manufacturer figure. */
+  massKg: number | null
+  /** Latest catalogued orbit (GCAT currentcat), null once reentered. */
+  perigeeKm: number | null
+  apogeeKm: number | null
+  incDeg: number | null
+  periodMin: number | null
+  orbitDate: string | null
+  /** CelesTrak GP element-set epoch (UTC, no zone suffix) when joined. */
+  gpEpoch: string | null
+  /** Revolutions per day. */
+  gpMeanMotion: number | null
+  gpEccentricity: number | null
+}
+
+export interface StarlinkSnapshot {
+  meta: StarlinkMeta
+  satellites: Satellite[]
+}
+
+/** Columnar transport shape of public/data/starlink-gp.json (SGP4 inputs). */
+export interface GpFile {
+  v: 1
+  generatedAt: string
+  source: string
+  fields: string[]
+  rows: Array<[number, string, number, number, number, number, number, number, number, number, number]>
+}
+
+/** One CelesTrak GP element set, ready for satellite.js json2satrec. */
+export interface GpElements {
+  norad: number
+  epoch: string
+  meanMotion: number
+  ecc: number
+  inc: number
+  raan: number
+  argp: number
+  meanAnomaly: number
+  bstar: number
+  mmDot: number
+  mmDdot: number
+}
+
+/** McDowell's log.dat weekly sample: [date, ...counts] per `fields`. */
+export interface StarlinkHistoryFile {
+  v: 1
+  generatedAt: string
+  source: string
+  fields: string[]
+  rows: Array<[string, ...number[]]>
+}
+
 /* ------------------------------ UI view models ----------------------------- */
 
-export type TabId = 'upcoming' | 'past' | 'analytics' | 'boosters'
+export type TabId = 'upcoming' | 'past' | 'analytics' | 'boosters' | 'starlink'
 
 export type StarlinkFilter = 'all' | 'customer' | 'starlink'
 

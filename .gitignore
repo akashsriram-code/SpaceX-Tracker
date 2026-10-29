@@ -21,3 +21,7 @@ yarn-error.log*
 # NOTE: public/data/*.json is intentionally NOT ignored. The snapshot is
 # committed so the site can build and deploy even if Launch Library 2 is
 # unreachable or rate-limited during CI.
+
+# Raw upstream downloads + ETags for scripts/fetch-starlink.mjs. Persisted in CI
+# with actions/cache; never committed.
+.cache/

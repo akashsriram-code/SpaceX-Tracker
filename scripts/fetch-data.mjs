@@ -254,6 +254,8 @@ function normalizeLaunch(raw) {
     probability: num(raw?.probability),
     weatherConcerns: str(raw?.weather_concerns),
     padLaunchAttemptCount: num(raw?.pad_launch_attempt_count),
+    // COSPAR launch id ("2026-160"); joins Starlink satellites to their launch.
+    launchDesignator: str(raw?.launch_designator),
   }
 }
 

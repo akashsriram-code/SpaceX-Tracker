@@ -361,6 +361,15 @@ export const LAUNCH_COLUMNS: ColumnSpec<Launch>[] = [
     value: (l) => l.padLaunchAttemptCount,
   },
   {
+    header: 'COSPAR launch ID',
+    kind: 'text',
+    width: 11,
+    source: 'launchDesignator',
+    description:
+      'International designator of the launch, e.g. 2026-160; blank before launch. Satellites from this launch have COSPAR ids starting with it.',
+    value: (l) => l.launchDesignator,
+  },
+  {
     header: 'Launch provider',
     kind: 'text',
     width: 12,
@@ -859,6 +868,7 @@ export const LAUNCH_FIELDS = {
   probability: 'Weather go (%)',
   weatherConcerns: 'Weather concerns',
   padLaunchAttemptCount: 'Pad launch attempt #',
+  launchDesignator: 'COSPAR launch ID',
 } satisfies Record<keyof Launch, string>
 
 export const STATUS_FIELDS = {

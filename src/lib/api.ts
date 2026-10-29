@@ -18,7 +18,7 @@ export const CACHE_TTL_MS = 15 * 60 * 1000 // 15 minutes
  * so data URLs stay correct on GitHub Pages project sites without any
  * hand-maintained path constants.
  */
-function dataUrl(file: string): string {
+export function dataUrl(file: string): string {
   const base = import.meta.env.BASE_URL || '/'
   return `${base.replace(/\/$/, '')}/data/${file}`
 }
@@ -59,7 +59,7 @@ export function isCacheFresh(envelope: CacheEnvelope | null): boolean {
   return Date.now() - envelope.storedAt < CACHE_TTL_MS
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
+export async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { headers: { Accept: 'application/json' } })
   if (!res.ok) {
     throw new Error(`Failed to load ${url} (HTTP ${res.status})`)

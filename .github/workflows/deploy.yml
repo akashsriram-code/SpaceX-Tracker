@@ -72,6 +72,54 @@ jobs:
             console.log('Snapshot OK: ' + d.length + ' launches');
           "
 
+      # Starlink satellite data (GCAT + CelesTrak; see scripts/fetch-starlink.mjs).
+      # Permissions stay read-only, so nothing is committed back: raw downloads,
+      # ETags and the last good outputs persist between runs in the Actions
+      # cache instead. A fresh key per run always saves; restore-keys picks
+      # up the newest previous one.
+      - name: Restore Starlink source cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/starlink
+          key: starlink-${{ github.run_id }}
+          restore-keys: starlink-
+
+      - name: Refresh Starlink snapshot
+        # Gated inside the script: GCAT at most every 20 h (conditional GETs),
+        # CelesTrak GP at most every 2 h, one request, never retried. Non-fatal
+        # like the launch refresh: on failure the script restores the newest
+        # cached good output, else the committed snapshot is deployed.
+        continue-on-error: true
+        run: npm run data:starlink
+
+      - name: Save Starlink source cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/starlink
+          key: starlink-${{ github.run_id }}
+
+      - name: Verify Starlink snapshot exists
+        run: |
+          node -e "
+            const d = require('./public/data/starlink.json');
+            const gp = require('./public/data/starlink-gp.json');
+            if (d.v !== 1 || !Array.isArray(d.rows) || d.rows.length < 12000) {
+              console.error('::error::starlink.json is invalid (' + (d.rows?.length ?? 0) + ' satellites).');
+              process.exit(1);
+            }
+            if (gp.v !== 1 || !Array.isArray(gp.rows) || gp.rows.length < 10000) {
+              console.error('::error::starlink-gp.json is invalid (' + (gp.rows?.length ?? 0) + ' element sets).');
+              process.exit(1);
+            }
+            console.log('Starlink OK: ' + d.rows.length + ' satellites (GCAT ' + d.meta.gcatUpdated + '), ' + gp.rows.length + ' element sets');
+          "
+
+      - name: Audit Starlink classification
+        # Reconciles against McDowell's published counts. Warns (never fails)
+        # on drift or an unknown GCAT version string.
+        run: npm run audit:starlink
+
       - name: Build
         run: npm run build
 
@@ -81,6 +129,9 @@ jobs:
         # library upgrade) that breaks the export should stop the deploy, not
         # ship a quietly wrong spreadsheet.
         run: npm run verify:export
+
+      - name: Verify Starlink spreadsheet export
+        run: npm run verify:starlink-export
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
